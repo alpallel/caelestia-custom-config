@@ -1,0 +1,103 @@
+{
+    "appearance": {
+        "transparency": {
+            "enabled": false
+        }
+    },
+    "bar": {
+        "activeWindow": {
+            "compact": false,
+            "inverted": true
+        },
+        "clock": {
+            "background": false,
+            "showDate": false,
+            "showIcon": false
+        },
+        "statusIcons": [
+            {
+                "enabled": true,
+                "id": "lockStatus"
+            },
+            {
+                "enabled": false,
+                "id": "audio"
+            },
+            {
+                "enabled": false,
+                "id": "microphone"
+            },
+            {
+                "enabled": false,
+                "id": "kbLayout"
+            },
+            {
+                "enabled": true,
+                "id": "network"
+            },
+            {
+                "enabled": true,
+                "id": "bluetooth"
+            },
+            {
+                "enabled": true,
+                "id": "battery"
+            }
+        ],
+        "tray": {
+            "background": false,
+            "compact": true,
+            "recolour": false
+        },
+        "workspaces": {
+            "activeTrail": false
+        }
+    },
+    "general": {
+        "apps": {
+            "explorer": [
+                "dolphin"
+            ]
+        }
+    },
+    "launcher": {
+        "actionPrefix": "/",
+        "maxShown": 10
+    },
+    "services": {
+        "useFahrenheit": false,
+        "useTwelveHourClock": false
+    },
+    "utilities": {
+        "quickToggles": [
+            {
+                "enabled": false,
+                "id": "wifi"
+            },
+            {
+                "enabled": true,
+                "id": "bluetooth"
+            },
+            {
+                "enabled": true,
+                "id": "mic"
+            },
+            {
+                "enabled": true,
+                "id": "settings"
+            },
+            {
+                "enabled": true,
+                "id": "gameMode"
+            },
+            {
+                "enabled": true,
+                "id": "dnd"
+            },
+            {
+                "enabled": true,
+                "id": "vpn"
+            }
+        ]
+    }
+}
