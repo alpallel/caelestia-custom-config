@@ -20,7 +20,7 @@
                 "id": "lockStatus"
             },
             {
-                "enabled": false,
+                "enabled": true,
                 "id": "audio"
             },
             {
@@ -53,6 +53,9 @@
             "activeTrail": false
         }
     },
+    "dashboard": {
+        "dragThreshold": 5
+    },
     "general": {
         "apps": {
             "explorer": [
@@ -64,9 +67,12 @@
         "actionPrefix": "/",
         "maxShown": 10
     },
+    "paths": {
+        "mediaGif": "/home/alpallel/Pictures/gifs/amiya_vibin.gif",
+        "sessionGif": "/home/alpallel/Pictures/gifs/kirara-sleep.gif"
+    },
     "services": {
-        "useFahrenheit": false,
-        "useTwelveHourClock": false
+        "weatherLocation": "Depok"
     },
     "utilities": {
         "quickToggles": [
@@ -98,6 +104,25 @@
                 "enabled": true,
                 "id": "vpn"
             }
-        ]
+        ],
+        "toasts": {
+            "chargingChanged": false
+        },
+        "vpn": {
+            "enabled": false,
+            "provider": [
+                {
+                    "connectCmd": [
+                    ],
+                    "disconnectCmd": [
+                    ],
+                    "displayName": "warp",
+                    "id": "vpn-msvsyyl3-2jfiz",
+                    "interface": "",
+                    "name": "warp"
+                }
+            ],
+            "selectedProvider": "vpn-msvsyyl3-2jfiz"
+        }
     }
 }
