@@ -60,6 +60,10 @@
         "apps": {
             "explorer": [
                 "dolphin"
+            ],
+            "playback": [
+                "/usr/bin/vlc",
+                "--started-from-file"
             ]
         }
     },
