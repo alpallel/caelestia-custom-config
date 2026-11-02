@@ -113,7 +113,7 @@
             "chargingChanged": false
         },
         "vpn": {
-            "enabled": false,
+            "enabled": true,
             "provider": [
                 {
                     "connectCmd": [

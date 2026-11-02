@@ -65,3 +65,9 @@ for _, win in ipairs(hl.get_windows() or {}) do
 
 
 hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'")
+
+-- Auto clicker toggle
+create_bind(
+    vars.kbAutoClicker,
+    hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/autoclicker.sh")
+)
