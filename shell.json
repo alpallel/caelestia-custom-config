@@ -12,7 +12,12 @@
         "clock": {
             "background": false,
             "showDate": false,
-            "showIcon": false
+            "showIcon": false,
+            "showSeconds": true
+        },
+        "popouts": {
+            "activeWindow": true,
+            "tray": true
         },
         "statusIcons": [
             {
@@ -54,7 +59,12 @@
         }
     },
     "dashboard": {
-        "dragThreshold": 5
+        "dragThreshold": 5,
+        "enabled": true,
+        "resourceUpdateInterval": 500,
+        "showClockSeconds": true,
+        "showOnHover": true,
+        "showWeather": true
     },
     "general": {
         "apps": {
@@ -76,9 +86,22 @@
         "sessionGif": "/home/alpallel/Pictures/gifs/kirara-sleep.gif"
     },
     "services": {
-        "weatherLocation": "Depok"
+        "clockFormat": "TwentyFourHour",
+        "dataUnits": "Decimal",
+        "weatherLocation": "Depok",
+        "weatherUnits": "Celsius"
+    },
+    "session": {
+        "commands": {
+            "logout": [
+                "hyprctl",
+                "dispatch",
+                "hl.dsp.exit()"
+            ]
+        }
     },
     "utilities": {
+        "maxToasts": 3,
         "quickToggles": [
             {
                 "enabled": false,
@@ -110,7 +133,8 @@
             }
         ],
         "toasts": {
-            "chargingChanged": false
+            "chargingChanged": false,
+            "fullscreen": "all"
         },
         "vpn": {
             "enabled": true,
@@ -124,6 +148,24 @@
                     "id": "vpn-msvsyyl3-2jfiz",
                     "interface": "",
                     "name": "warp"
+                },
+                {
+                    "connectCmd": [
+                        "nmcli",
+                        "connection",
+                        "up",
+                        "proton0"
+                    ],
+                    "disconnectCmd": [
+                        "nmcli",
+                        "connection",
+                        "down",
+                        "proton0"
+                    ],
+                    "displayName": "Proton VPN US",
+                    "id": "vpn-proton0",
+                    "interface": "proton0",
+                    "name": "proton"
                 }
             ],
             "selectedProvider": "vpn-msvsyyl3-2jfiz"

@@ -32,17 +32,15 @@ if type(keybinds) == "table" then
                 -- Trackpad toggle
                 create_bind(
                     vars.kbTouchpadToggle,
-                    hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/toggle-touchpad.sh"),
+                    hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/caelestia/scripts/toggle-touchpad.sh"),
                             { locked = true }
                 )
 
 
 -- Autostart scripts
 hl.on("hyprland.start", function()
-    hl.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/smart-start.sh")
+    hl.exec_cmd(os.getenv("HOME") .. "/.config/caelestia/scripts/smart-start.sh")
 end)
-
-
 
 -- One-time placement for Brave on boot
 local brave_placed = false
@@ -69,5 +67,5 @@ hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark
 -- Auto clicker toggle
 create_bind(
     vars.kbAutoClicker,
-    hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/autoclicker.sh")
+    hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/caelestia/scripts/autoclicker.sh")
 )
