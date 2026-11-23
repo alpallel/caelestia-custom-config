@@ -69,3 +69,10 @@ create_bind(
     vars.kbAutoClicker,
     hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/caelestia/scripts/autoclicker.sh")
 )
+
+-- Auto clicker speed config
+create_bind(
+    vars.kbAutoClickerConfig,
+    hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/caelestia/scripts/autoclicker-config"),
+    { locked = true }
+)
