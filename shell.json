@@ -137,7 +137,7 @@
             "fullscreen": "all"
         },
         "vpn": {
-            "enabled": false,
+            "enabled": true,
             "provider": [
                 {
                     "connectCmd": [
