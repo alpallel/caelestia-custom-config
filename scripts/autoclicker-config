@@ -19,23 +19,45 @@ SCRIPT = CONFIG_DIR / "scripts" / "autoclicker.sh"
 MIN_CPS = 1
 MAX_CPS = 100
 DEFAULT_CPS = 20
+BUTTONS = ("left", "right")
+DEFAULT_BUTTON = "left"
+MODES = ("click", "hold")
+DEFAULT_MODE = "click"
 
 
-def read_cps():
+def read_config():
+    cps = DEFAULT_CPS
+    button = DEFAULT_BUTTON
+    mode = DEFAULT_MODE
+
     try:
         for line in CONFIG_FILE.read_text().splitlines():
             key, separator, value = line.partition("=")
-            if separator and key.strip() == "cps":
-                return max(MIN_CPS, min(MAX_CPS, int(value)))
-    except (OSError, ValueError):
+            if not separator:
+                continue
+
+            key = key.strip()
+            value = value.strip()
+
+            if key == "cps":
+                try:
+                    cps = max(MIN_CPS, min(MAX_CPS, int(value)))
+                except ValueError:
+                    pass
+            elif key == "button" and value in BUTTONS:
+                button = value
+            elif key == "mode" and value in MODES:
+                mode = value
+    except OSError:
         pass
-    return DEFAULT_CPS
+
+    return cps, button, mode
 
 
-def write_cps(cps):
+def write_config(cps, button, mode):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     temporary = CONFIG_FILE.with_name(CONFIG_FILE.name + ".tmp")
-    temporary.write_text(f"cps={cps}\n")
+    temporary.write_text(f"cps={cps}\nbutton={button}\nmode={mode}\n")
     temporary.replace(CONFIG_FILE)
 
 
@@ -62,14 +84,17 @@ def clicker_status():
 class AutoclickerWindow(Adw.ApplicationWindow):
     def __init__(self, application):
         super().__init__(application=application, title="Auto Clicker")
-        self.set_default_size(400, 240)
+        self.set_default_size(400, 350)
         self.set_resizable(False)
 
         self._running = False
         self._syncing = False
         self._timer_id = None
 
-        cps = read_cps()
+        cps, button, mode = read_config()
+        self._cps = cps
+        self._button = button
+        self._mode = mode
 
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(Adw.HeaderBar())
@@ -82,6 +107,18 @@ class AutoclickerWindow(Adw.ApplicationWindow):
 
         self.status_label = Gtk.Label(label="Stopped", xalign=0)
         self.status_label.add_css_class("dim-label")
+
+        mode_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        mode_title = Gtk.Label(label="Mode", xalign=0)
+        mode_title.set_hexpand(True)
+
+        self.mode_drop = Gtk.DropDown.new_from_strings(["Click", "Hold"])
+        self.mode_drop.set_selected(MODES.index(mode))
+        self.mode_drop.set_valign(Gtk.Align.CENTER)
+        self.mode_drop.connect("notify::selected", self.on_mode_changed)
+
+        mode_row.append(mode_title)
+        mode_row.append(self.mode_drop)
 
         speed_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         speed_title = Gtk.Label(label="Click speed", xalign=0)
@@ -109,6 +146,23 @@ class AutoclickerWindow(Adw.ApplicationWindow):
         self.scale.connect("value-changed", self.on_scale_changed)
         self.spin.connect("value-changed", self.on_spin_changed)
 
+        self.speed_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.speed_section.append(speed_row)
+        self.speed_section.append(self.scale)
+        self.speed_section.set_sensitive(mode != "hold")
+
+        button_choice_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        button_title = Gtk.Label(label="Mouse button", xalign=0)
+        button_title.set_hexpand(True)
+
+        self.button_drop = Gtk.DropDown.new_from_strings(["Left", "Right"])
+        self.button_drop.set_selected(BUTTONS.index(button))
+        self.button_drop.set_valign(Gtk.Align.CENTER)
+        self.button_drop.connect("notify::selected", self.on_button_changed)
+
+        button_choice_row.append(button_title)
+        button_choice_row.append(self.button_drop)
+
         button_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         button_row.set_halign(Gtk.Align.END)
 
@@ -122,8 +176,9 @@ class AutoclickerWindow(Adw.ApplicationWindow):
         button_row.append(self.toggle_button)
 
         content.append(self.status_label)
-        content.append(speed_row)
-        content.append(self.scale)
+        content.append(mode_row)
+        content.append(self.speed_section)
+        content.append(button_choice_row)
         content.append(button_row)
 
         toolbar.set_content(content)
@@ -138,8 +193,24 @@ class AutoclickerWindow(Adw.ApplicationWindow):
         self.refresh_status()
         self._timer_id = GLib.timeout_add(500, self.refresh_status)
 
+    def save_config(self):
+        try:
+            write_config(self._cps, self._button, self._mode)
+        except OSError as error:
+            self.status_label.set_text(f"Could not save settings: {error}")
+
+    def on_mode_changed(self, dropdown, _pspec):
+        selected = dropdown.get_selected()
+        if selected >= len(MODES):
+            return
+        self._mode = MODES[selected]
+        self.speed_section.set_sensitive(self._mode != "hold")
+        self.save_config()
+        self.refresh_status()
+
     def set_speed(self, cps, source):
         cps = max(MIN_CPS, min(MAX_CPS, int(cps)))
+        self._cps = cps
 
         self._syncing = True
         if source != "scale":
@@ -148,10 +219,7 @@ class AutoclickerWindow(Adw.ApplicationWindow):
             self.spin.set_value(cps)
         self._syncing = False
 
-        try:
-            write_cps(cps)
-        except OSError as error:
-            self.status_label.set_text(f"Could not save speed: {error}")
+        self.save_config()
 
     def on_scale_changed(self, scale):
         if not self._syncing:
@@ -160,6 +228,13 @@ class AutoclickerWindow(Adw.ApplicationWindow):
     def on_spin_changed(self, spin):
         if not self._syncing:
             self.set_speed(spin.get_value(), source="spin")
+
+    def on_button_changed(self, dropdown, _pspec):
+        selected = dropdown.get_selected()
+        if selected >= len(BUTTONS):
+            return
+        self._button = BUTTONS[selected]
+        self.save_config()
 
     def on_toggle(self, _button):
         command = "stop" if self._running else "start"
@@ -200,17 +275,25 @@ class AutoclickerWindow(Adw.ApplicationWindow):
     def refresh_status(self):
         running, cps = clicker_status()
         self._running = running
+        _, button, mode = read_config()
 
         if running:
-            self.status_label.set_text(f"Running · {cps} CPS" if cps else "Running")
-            self.toggle_button.set_label("Stop")
+            if mode == "hold":
+                self.status_label.set_text(f"Holding · {button.title()}")
+            else:
+                details = f"{cps} CPS · {button.title()}" if cps else button.title()
+                self.status_label.set_text(f"Running · {details}")
+            self.toggle_button.set_label("Release" if mode == "hold" else "Stop")
             self.toggle_button.remove_css_class("suggested-action")
             self.toggle_button.add_css_class("destructive-action")
         else:
             self.status_label.set_text("Stopped")
-            self.toggle_button.set_label("Start")
+            self.toggle_button.set_label("Hold" if mode == "hold" else "Start")
             self.toggle_button.remove_css_class("destructive-action")
             self.toggle_button.add_css_class("suggested-action")
+
+        self.mode_drop.set_sensitive(not running)
+        self.button_drop.set_sensitive(not (running and mode == "hold"))
 
         return True
 

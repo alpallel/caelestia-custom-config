@@ -6,15 +6,23 @@ CONF="$CONF_DIR/autoclicker.conf"
 DEFAULT_CPS=20
 MIN_CPS=1
 MAX_CPS=100
+DEFAULT_BUTTON=left
+DEFAULT_MODE=click
 
-# Load the configured click speed into CPS. Clamps bad values to the valid range.
-load_cps() {
+# Load and validate the configured speed, mouse button, and mode.
+load_config() {
     CPS=$DEFAULT_CPS
+    BUTTON=$DEFAULT_BUTTON
+    MODE=$DEFAULT_MODE
 
     if [[ -r $CONF ]]; then
         local key value
         while IFS='=' read -r key value; do
-            [[ $key == cps ]] && CPS=$value
+            case $key in
+                cps) CPS=$value ;;
+                button) BUTTON=$value ;;
+                mode) MODE=$value ;;
+            esac
         done < "$CONF"
     fi
 
@@ -23,6 +31,24 @@ load_cps() {
     CPS=$((10#$CPS))
     ((CPS < MIN_CPS)) && CPS=$MIN_CPS
     ((CPS > MAX_CPS)) && CPS=$MAX_CPS
+
+    if [[ $BUTTON == right ]]; then
+        CLICK_CODE=0xC1
+        BUTTON_DOWN=0x41
+        BUTTON_LABEL=Right
+    else
+        CLICK_CODE=0xC0
+        BUTTON_DOWN=0x40
+        BUTTON_LABEL=Left
+    fi
+
+    [[ $MODE == hold ]] || MODE=click
+}
+
+# Release both mouse buttons. Up events for an unpressed button are harmless.
+release_buttons() {
+    ydotool click 0x80 >/dev/null 2>&1
+    ydotool click 0x81 >/dev/null 2>&1
 }
 
 # Print the running pid, or return 1 when the clicker is not running.
@@ -38,16 +64,33 @@ running_pid() {
 start_clicker() {
     local pid
     if pid=$(running_pid); then
-        load_cps
-        caelestia shell toaster info "Auto Clicker" "Already running ($CPS CPS)" "mouse" 2>/dev/null
+        load_config
+        if [[ $MODE == hold ]]; then
+            caelestia shell toaster info "Auto Clicker" "Already holding ($BUTTON_LABEL)" "mouse" 2>/dev/null
+        else
+            caelestia shell toaster info "Auto Clicker" "Already running ($CPS CPS, $BUTTON_LABEL)" "mouse" 2>/dev/null
+        fi
         return 0
     fi
 
-    load_cps
+    load_config
+    if [[ $MODE == hold ]]; then
+        release_buttons
+        (
+            trap 'release_buttons; exit 0' TERM INT
+            trap 'release_buttons' EXIT
+            ydotool click "$BUTTON_DOWN" >/dev/null 2>&1
+            while true; do sleep 0.2; done
+        ) >/dev/null 2>&1 &
+        echo $! > "$PID_FILE"
+        caelestia shell toaster success "Auto Clicker" "Holding ($BUTTON_LABEL)" "mouse" 2>/dev/null
+        return 0
+    fi
+
     (
         while true; do
-            load_cps
-            ydotool click 0xC0 >/dev/null 2>&1
+            load_config
+            ydotool click "$CLICK_CODE" >/dev/null 2>&1
 
             # Interval derived from CPS, in microseconds
             local us=$((1000000 / CPS))
@@ -58,15 +101,21 @@ start_clicker() {
     ) >/dev/null 2>&1 &
 
     echo $! > "$PID_FILE"
-    caelestia shell toaster success "Auto Clicker" "Enabled ($CPS CPS)" "mouse" 2>/dev/null
+    caelestia shell toaster success "Auto Clicker" "Enabled ($CPS CPS, $BUTTON_LABEL)" "mouse" 2>/dev/null
 }
 
 stop_clicker() {
     local pid
+    load_config
     if pid=$(running_pid); then
+        release_buttons
         kill "$pid" 2>/dev/null
         rm -f "$PID_FILE"
-        caelestia shell toaster warn "Auto Clicker" "Disabled" "mouse" 2>/dev/null
+        if [[ $MODE == hold ]]; then
+            caelestia shell toaster warn "Auto Clicker" "Released" "mouse" 2>/dev/null
+        else
+            caelestia shell toaster warn "Auto Clicker" "Disabled" "mouse" 2>/dev/null
+        fi
     else
         rm -f "$PID_FILE"
     fi
@@ -83,7 +132,7 @@ toggle_clicker() {
 status_clicker() {
     local pid
     if pid=$(running_pid); then
-        load_cps
+        load_config
         printf 'running %s %s\n' "$pid" "$CPS"
     else
         printf 'stopped\n'
