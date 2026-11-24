@@ -23,12 +23,59 @@ BUTTONS = ("left", "right")
 DEFAULT_BUTTON = "left"
 MODES = ("click", "hold")
 DEFAULT_MODE = "click"
+TARGETS = ("mouse", "key")
+DEFAULT_TARGET = "mouse"
+DEFAULT_KEYCODE = 57
+DEFAULT_KEY_NAME = "Space"
+MIN_KEYCODE = 1
+MAX_KEYCODE = 767
+
+SPECIAL_KEYS = {
+    "space": "Space",
+    "Return": "Enter",
+    "KP_Enter": "Numpad Enter",
+    "Escape": "Esc",
+    "BackSpace": "Backspace",
+    "Tab": "Tab",
+    "Shift_L": "Left Shift",
+    "Shift_R": "Right Shift",
+    "Control_L": "Left Ctrl",
+    "Control_R": "Right Ctrl",
+    "Alt_L": "Left Alt",
+    "Alt_R": "Right Alt",
+    "Super_L": "Left Super",
+    "Super_R": "Right Super",
+    "Caps_Lock": "Caps Lock",
+    "Delete": "Delete",
+    "Insert": "Insert",
+    "Home": "Home",
+    "End": "End",
+    "Page_Up": "Page Up",
+    "Page_Down": "Page Down",
+    "Up": "Up",
+    "Down": "Down",
+    "Left": "Left",
+    "Right": "Right",
+}
+
+
+def format_key_name(name):
+    if not name:
+        return DEFAULT_KEY_NAME
+    if name in SPECIAL_KEYS:
+        return SPECIAL_KEYS[name]
+    if len(name) == 1:
+        return name.upper()
+    return name
 
 
 def read_config():
     cps = DEFAULT_CPS
     button = DEFAULT_BUTTON
     mode = DEFAULT_MODE
+    target = DEFAULT_TARGET
+    keycode = DEFAULT_KEYCODE
+    key_name = ""
 
     try:
         for line in CONFIG_FILE.read_text().splitlines():
@@ -48,16 +95,38 @@ def read_config():
                 button = value
             elif key == "mode" and value in MODES:
                 mode = value
+            elif key == "target" and value in TARGETS:
+                target = value
+            elif key == "keycode":
+                try:
+                    code = int(value)
+                except ValueError:
+                    pass
+                else:
+                    if MIN_KEYCODE <= code <= MAX_KEYCODE:
+                        keycode = code
+            elif key == "key_name":
+                key_name = value
     except OSError:
         pass
 
-    return cps, button, mode
+    if not key_name:
+        key_name = DEFAULT_KEY_NAME if keycode == DEFAULT_KEYCODE else f"Key {keycode}"
+
+    return cps, button, mode, target, keycode, key_name
 
 
-def write_config(cps, button, mode):
+def write_config(cps, button, mode, target, keycode, key_name):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     temporary = CONFIG_FILE.with_name(CONFIG_FILE.name + ".tmp")
-    temporary.write_text(f"cps={cps}\nbutton={button}\nmode={mode}\n")
+    temporary.write_text(
+        f"cps={cps}\n"
+        f"button={button}\n"
+        f"mode={mode}\n"
+        f"target={target}\n"
+        f"keycode={keycode}\n"
+        f"key_name={key_name}\n"
+    )
     temporary.replace(CONFIG_FILE)
 
 
@@ -84,17 +153,21 @@ def clicker_status():
 class AutoclickerWindow(Adw.ApplicationWindow):
     def __init__(self, application):
         super().__init__(application=application, title="Auto Clicker")
-        self.set_default_size(400, 350)
+        self.set_default_size(400, 400)
         self.set_resizable(False)
 
         self._running = False
         self._syncing = False
+        self._capturing = False
         self._timer_id = None
 
-        cps, button, mode = read_config()
+        cps, button, mode, target, keycode, key_name = read_config()
         self._cps = cps
         self._button = button
         self._mode = mode
+        self._target = target
+        self._keycode = keycode
+        self._key_name = key_name
 
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(Adw.HeaderBar())
@@ -119,6 +192,18 @@ class AutoclickerWindow(Adw.ApplicationWindow):
 
         mode_row.append(mode_title)
         mode_row.append(self.mode_drop)
+
+        target_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        target_title = Gtk.Label(label="Target", xalign=0)
+        target_title.set_hexpand(True)
+
+        self.target_drop = Gtk.DropDown.new_from_strings(["Mouse", "Keyboard"])
+        self.target_drop.set_selected(TARGETS.index(target))
+        self.target_drop.set_valign(Gtk.Align.CENTER)
+        self.target_drop.connect("notify::selected", self.on_target_changed)
+
+        target_row.append(target_title)
+        target_row.append(self.target_drop)
 
         speed_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         speed_title = Gtk.Label(label="Click speed", xalign=0)
@@ -151,20 +236,33 @@ class AutoclickerWindow(Adw.ApplicationWindow):
         self.speed_section.append(self.scale)
         self.speed_section.set_sensitive(mode != "hold")
 
-        button_choice_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        button_title = Gtk.Label(label="Mouse button", xalign=0)
-        button_title.set_hexpand(True)
+        self.mouse_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        mouse_title = Gtk.Label(label="Mouse button", xalign=0)
+        mouse_title.set_hexpand(True)
 
         self.button_drop = Gtk.DropDown.new_from_strings(["Left", "Right"])
         self.button_drop.set_selected(BUTTONS.index(button))
         self.button_drop.set_valign(Gtk.Align.CENTER)
         self.button_drop.connect("notify::selected", self.on_button_changed)
 
-        button_choice_row.append(button_title)
-        button_choice_row.append(self.button_drop)
+        self.mouse_row.append(mouse_title)
+        self.mouse_row.append(self.button_drop)
 
-        button_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        button_row.set_halign(Gtk.Align.END)
+        self.key_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        key_title = Gtk.Label(label="Keyboard key", xalign=0)
+        key_title.set_hexpand(True)
+
+        self.key_button = Gtk.Button(label=self._key_name)
+        self.key_button.set_valign(Gtk.Align.CENTER)
+        self.key_button.set_tooltip_text("Click, then press a key to capture it")
+        self.key_button.connect("clicked", self.on_key_button_clicked)
+        self.key_button.connect("notify::has-focus", self.on_key_focus_changed)
+
+        self.key_row.append(key_title)
+        self.key_row.append(self.key_button)
+
+        action_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        action_row.set_halign(Gtk.Align.END)
 
         close_button = Gtk.Button(label="Close")
         close_button.connect("clicked", lambda *_: self.close())
@@ -172,41 +270,47 @@ class AutoclickerWindow(Adw.ApplicationWindow):
         self.toggle_button = Gtk.Button(label="Start")
         self.toggle_button.connect("clicked", self.on_toggle)
 
-        button_row.append(close_button)
-        button_row.append(self.toggle_button)
+        action_row.append(close_button)
+        action_row.append(self.toggle_button)
 
         content.append(self.status_label)
         content.append(mode_row)
+        content.append(target_row)
         content.append(self.speed_section)
-        content.append(button_choice_row)
-        content.append(button_row)
+        content.append(self.mouse_row)
+        content.append(self.key_row)
+        content.append(action_row)
 
         toolbar.set_content(content)
         self.set_content(toolbar)
 
         key_controller = Gtk.EventControllerKey()
+        key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         key_controller.connect("key-pressed", self.on_key_pressed)
         self.add_controller(key_controller)
 
         self.connect("close-request", self.on_close)
 
+        self.update_target_rows()
         self.refresh_status()
         self._timer_id = GLib.timeout_add(500, self.refresh_status)
 
+    def update_target_rows(self):
+        self.mouse_row.set_visible(self._target == "mouse")
+        self.key_row.set_visible(self._target == "key")
+
     def save_config(self):
         try:
-            write_config(self._cps, self._button, self._mode)
+            write_config(
+                self._cps,
+                self._button,
+                self._mode,
+                self._target,
+                self._keycode,
+                self._key_name,
+            )
         except OSError as error:
             self.status_label.set_text(f"Could not save settings: {error}")
-
-    def on_mode_changed(self, dropdown, _pspec):
-        selected = dropdown.get_selected()
-        if selected >= len(MODES):
-            return
-        self._mode = MODES[selected]
-        self.speed_section.set_sensitive(self._mode != "hold")
-        self.save_config()
-        self.refresh_status()
 
     def set_speed(self, cps, source):
         cps = max(MIN_CPS, min(MAX_CPS, int(cps)))
@@ -236,6 +340,71 @@ class AutoclickerWindow(Adw.ApplicationWindow):
         self._button = BUTTONS[selected]
         self.save_config()
 
+    def on_mode_changed(self, dropdown, _pspec):
+        selected = dropdown.get_selected()
+        if selected >= len(MODES):
+            return
+        self._mode = MODES[selected]
+        self.speed_section.set_sensitive(self._mode != "hold")
+        self.save_config()
+        self.refresh_status()
+
+    def on_target_changed(self, dropdown, _pspec):
+        selected = dropdown.get_selected()
+        if selected >= len(TARGETS):
+            return
+        self._target = TARGETS[selected]
+        self.update_target_rows()
+        self.save_config()
+        self.refresh_status()
+
+    def on_key_button_clicked(self, _button):
+        if self._running:
+            return
+        if self._capturing:
+            self.cancel_key_capture()
+            return
+
+        self._capturing = True
+        self.key_button.set_label("Press a key…")
+        self.key_button.add_css_class("suggested-action")
+        self.key_button.grab_focus()
+
+    def on_key_focus_changed(self, button, _pspec):
+        if self._capturing and not button.has_focus():
+            self.cancel_key_capture()
+
+    def cancel_key_capture(self):
+        self._capturing = False
+        self.key_button.remove_css_class("suggested-action")
+        self.key_button.set_label(self._key_name)
+
+    def on_key_pressed(self, _controller, keyval, keycode, _state):
+        if self._capturing:
+            if keyval == Gdk.KEY_Escape:
+                self.cancel_key_capture()
+                return True
+
+            evdev = keycode - 8
+            if evdev < MIN_KEYCODE or evdev > MAX_KEYCODE:
+                self.status_label.set_text("Unsupported key")
+                self.cancel_key_capture()
+                return True
+
+            self._keycode = evdev
+            self._key_name = format_key_name(Gdk.keyval_name(keyval) or f"Key {evdev}")
+            self._capturing = False
+            self.key_button.remove_css_class("suggested-action")
+            self.key_button.set_label(self._key_name)
+            self.save_config()
+            self.refresh_status()
+            return True
+
+        if keyval == Gdk.KEY_Escape:
+            self.close()
+            return True
+        return False
+
     def on_toggle(self, _button):
         command = "stop" if self._running else "start"
         try:
@@ -260,12 +429,6 @@ class AutoclickerWindow(Adw.ApplicationWindow):
 
         self.refresh_status()
 
-    def on_key_pressed(self, _controller, keyval, _keycode, _state):
-        if keyval == Gdk.KEY_Escape:
-            self.close()
-            return True
-        return False
-
     def on_close(self, _window):
         if self._timer_id is not None:
             GLib.source_remove(self._timer_id)
@@ -275,25 +438,30 @@ class AutoclickerWindow(Adw.ApplicationWindow):
     def refresh_status(self):
         running, cps = clicker_status()
         self._running = running
-        _, button, mode = read_config()
+
+        input_label = self._button.title() if self._target == "mouse" else self._key_name
 
         if running:
-            if mode == "hold":
-                self.status_label.set_text(f"Holding · {button.title()}")
+            if self._mode == "hold":
+                self.status_label.set_text(f"Holding · {input_label}")
             else:
-                details = f"{cps} CPS · {button.title()}" if cps else button.title()
+                details = f"{cps} CPS · {input_label}" if cps else input_label
                 self.status_label.set_text(f"Running · {details}")
-            self.toggle_button.set_label("Release" if mode == "hold" else "Stop")
+            self.toggle_button.set_label("Release" if self._mode == "hold" else "Stop")
             self.toggle_button.remove_css_class("suggested-action")
             self.toggle_button.add_css_class("destructive-action")
         else:
             self.status_label.set_text("Stopped")
-            self.toggle_button.set_label("Hold" if mode == "hold" else "Start")
+            self.toggle_button.set_label("Hold" if self._mode == "hold" else "Start")
             self.toggle_button.remove_css_class("destructive-action")
             self.toggle_button.add_css_class("suggested-action")
 
+        self.update_target_rows()
+        self.speed_section.set_sensitive(self._mode != "hold")
         self.mode_drop.set_sensitive(not running)
-        self.button_drop.set_sensitive(not (running and mode == "hold"))
+        self.target_drop.set_sensitive(not running)
+        self.button_drop.set_sensitive(not (running and self._mode == "hold"))
+        self.key_button.set_sensitive(not running)
 
         return True
 
