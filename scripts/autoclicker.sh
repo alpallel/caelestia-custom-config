@@ -119,6 +119,10 @@ start_clicker() {
             trap 'release_inputs; exit 0' TERM INT
             trap 'release_inputs' EXIT
             if [[ $TARGET == key ]]; then
+                # Let the config window close and focus return to the target
+                # before the key-down, otherwise key repeat has no receiver.
+                sleep 0.3
+                [[ -r $PID_FILE && $(<"$PID_FILE") == "$BASHPID" ]] || exit 0
                 ydotool key "${KEYCODE}:1" >/dev/null 2>&1
             else
                 ydotool click "$BUTTON_DOWN" >/dev/null 2>&1
@@ -126,7 +130,7 @@ start_clicker() {
             while true; do sleep 0.2; done
         ) >/dev/null 2>&1 &
         echo $! > "$PID_FILE"
-        caelestia shell toaster success "Auto Clicker" "Holding ($INPUT_LABEL)" "$INPUT_ICON" 2>/dev/null
+        ( caelestia shell toaster success "Auto Clicker" "Holding ($INPUT_LABEL)" "$INPUT_ICON" 2>/dev/null ) &
         return 0
     fi
 
@@ -148,7 +152,7 @@ start_clicker() {
     ) >/dev/null 2>&1 &
 
     echo $! > "$PID_FILE"
-    caelestia shell toaster success "Auto Clicker" "Enabled ($CPS CPS, $INPUT_LABEL)" "$INPUT_ICON" 2>/dev/null
+    ( caelestia shell toaster success "Auto Clicker" "Enabled ($CPS CPS, $INPUT_LABEL)" "$INPUT_ICON" 2>/dev/null ) &
 }
 
 stop_clicker() {
